@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using CustomerCoreApi.Data;
 using CustomerCoreApi.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace CustomerCoreApi.Controllers
 {
@@ -10,30 +11,41 @@ namespace CustomerCoreApi.Controllers
     public class CustomerController : ControllerBase
     {
         private readonly CustomerDbContext _dbContext;
+
         public CustomerController(CustomerDbContext dbContext)
         {
             _dbContext = dbContext;
         }
+
         [HttpGet]
-        public IActionResult GetCustomers()
+        public async Task<IActionResult> GetCustomers()
         {
-            var customers = _dbContext.Customers.ToList();
+            var customers = await _dbContext.Customers.ToListAsync();
             return Ok(customers);
         }
+
         [HttpGet]
         [Route("{id:guid}")]
-        public IActionResult GetCustomerID(Guid CustomerId)
+        public async Task<IActionResult> GetCustomerById(Guid id)
         {
-            var customer = _dbContext.Customers.Find(CustomerId);
+            var customer = await _dbContext.Customers.FindAsync(id);
+
             if (customer == null)
             {
-                return NotFound();
+                return NotFound(new { message = "Customer not found" });
             }
+
             return Ok(customer);
         }
+
         [HttpPost]
-        public IActionResult AddCustomer(Customer customer)
+        public async Task<IActionResult> AddCustomer([FromBody] Customer customer)
         {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
             var newCustomer = new Customer()
             {
                 Name = customer.Name,
@@ -41,38 +53,54 @@ namespace CustomerCoreApi.Controllers
                 Address = customer.Address,
                 TotalOrders = customer.TotalOrders
             };
-            _dbContext.Customers.Add(newCustomer);
-            _dbContext.SaveChanges();
-            return Ok(newCustomer);
+
+            await _dbContext.Customers.AddAsync(newCustomer);
+            await _dbContext.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetCustomerById), new { id = newCustomer.CustomerId }, newCustomer);
         }
+
         [HttpPut]
         [Route("{id:guid}")]
-        public IActionResult UpdateCustomer(Guid CustomerId, Customer customer)
+        public async Task<IActionResult> UpdateCustomer(Guid id, [FromBody] Customer customer)
         {
-            var existingCustomer = _dbContext.Customers.Find(CustomerId);
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var existingCustomer = await _dbContext.Customers.FindAsync(id);
+
             if (existingCustomer == null)
             {
-                return NotFound();
+                return NotFound(new { message = "Customer not found" });
             }
+
             existingCustomer.Name = customer.Name;
             existingCustomer.Email = customer.Email;
             existingCustomer.Address = customer.Address;
             existingCustomer.TotalOrders = customer.TotalOrders;
-            _dbContext.SaveChanges();
+
+            await _dbContext.SaveChangesAsync();
+
             return Ok(existingCustomer);
         }
+
         [HttpDelete]
         [Route("{id:guid}")]
-        public IActionResult DeleteCustomer(Guid CustomerId)
+        public async Task<IActionResult> DeleteCustomer(Guid id)
         {
-            var existingCustomer = _dbContext.Customers.Find(CustomerId);
+            var existingCustomer = await _dbContext.Customers.FindAsync(id);
+
             if (existingCustomer == null)
             {
-                return NotFound();
+                return NotFound(new { message = "Customer not found" });
             }
+
             _dbContext.Customers.Remove(existingCustomer);
-            _dbContext.SaveChanges();
-            return Ok(existingCustomer);
+            await _dbContext.SaveChangesAsync();
+
+            return Ok(new { message = "Customer deleted successfully", customer = existingCustomer });
         }
     }
 }
